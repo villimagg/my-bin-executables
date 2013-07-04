@@ -3,6 +3,7 @@
 main() {
     checkPermissions
     ceckIfFileExists "$1"
+    checkIfEnabled "$1"
     createSymlink "$1"
 }
 
@@ -27,6 +28,12 @@ function Die() {
 function ceckIfFileExists() {
     if [[ ! -f /etc/nginx/sites-available/$1 ]]; then
         Die "File $1 not found..."
+    fi
+}
+
+function checkIfEnabled() {
+    if [[ -f /etc/nginx/sites-enabled/$1 ]]; then
+        Die "Host exists and already enabled. Nothing to do."
     fi
 }
 
