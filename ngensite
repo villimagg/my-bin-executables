@@ -1,0 +1,43 @@
+#!/usr/bin/env bash
+
+main() {
+    checkPermissions
+    ceckIfFileExists "$1"
+    createSymlink "$1"
+}
+
+function checkPermissions() {
+    MYUID=`id -u 2> /dev/null`
+    if [ ! -z "$MYUID" ]; then
+        if [ $MYUID != 0 ]; then
+            Die "You need root privileges to run this script.";
+        fi
+    else
+        Die "Could not detect UID";
+    fi
+}
+
+function Die() {
+    echo
+    echo "$*"
+    echo
+    exit 1
+}
+
+function ceckIfFileExists() {
+    if [[ ! -f /etc/nginx/sites-available/$1 ]]; then
+        Die "File $1 not found..."
+    fi
+}
+
+function createSymlink() {
+    if [[ ! `ln -s /etc/nginx/sites-available/$1 /etc/nginx/sites-enabled/$1` ]]; then
+        echo
+        echo "Done! Reload your webserver: sudo service nginx reload"
+        echo
+    else
+        Die "Problem creating symlink to vhost... Exiting."
+    fi
+}
+
+main $*

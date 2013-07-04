@@ -1,0 +1,41 @@
+#!/usr/bin/env bash
+
+main() {
+    checkPermissions
+    ceckIfFileExists "$1"
+    removeSymlinkedFile "$1"
+}
+
+function checkPermissions() {
+    MYUID=`id -u 2> /dev/null`
+    if [ ! -z "$MYUID" ]; then
+        if [ $MYUID != 0 ]; then
+            Die "You need root privileges to run this script.";
+        fi
+    else
+        Die "Could not detect UID";
+    fi
+}
+
+function Die() {
+    echo
+    echo "$*"
+    echo
+    exit 1
+}
+
+function ceckIfFileExists() {
+    if [[ ! -f /etc/nginx/sites-enabled/$1 ]]; then
+        Die "File $1 not found..."
+    fi
+}
+
+function removeSymlinkedFile() {
+    if [[ ! `rm /etc/nginx/sites-enabled/$*` ]]; then
+        Die "Done! Reload your webserver: sudo service nginx reload"
+    else
+        Die "There was a problem removing vhost."
+    fi
+}
+
+main $*

@@ -1,0 +1,116 @@
+#!/usr/bin/env bash
+
+SITES_AVAILABLE='/etc/nginx/sites-available'
+HOST_FILE='/etc/hosts'
+VHOST_SERVERNAME=$1
+
+function Die() {
+    echo
+    echo $*
+    echo
+    exit 1
+}
+
+function checkPermission() {
+    if [[ $UID -ne 0 ]]; then 
+        Die "You must be root to run this script. Run 'sudo ngvhost <hostname>'"
+    fi
+} 
+
+function testIfServerNameProvided() {
+    if test ! -z "$1"; then
+        VHOST_SERVERNAME=$1
+    else
+        read -p "Please enter servername for vhost: " VHOST_SERVERNAME
+    fi
+}
+
+function createVhostFile() {
+    read -p "Please complete the path to the virtual hosts document root: $HOME/" VHOST_DOCROOT
+    FULLPATH="$SITES_AVAILABLE/$VHOST_SERVERNAME"
+    
+    VHOST_TEMPLATE="
+server {
+    listen 80;
+
+    server_name             $VHOST_SERVERNAME;
+    
+    root                    $HOME/$VHOST_DOCROOT;
+    index                   index.php;
+
+    access_log              /var/log/nginx/$VHOST_SERVERNAME-access.log;
+    error_log               /var/log/nginx/$VHOST_SERVERNAME-error.log;
+
+
+    charset                 utf-8;
+
+    location / { 
+                            try_files \$uri \$uri/ @rewrites;
+    }
+ 
+    location @rewrites {
+        rewrite ^ /index.php?\$query_string;
+    }
+    
+    location = /robots.txt  { access_log off; log_not_found off; }
+    location = /favicon.ico { access_log off; log_not_found off; }    
+ 
+    location ~ /\\.          { access_log off; log_not_found off; deny all; }
+ 
+    error_page 404 /index.php;
+
+    location = /50x.html {
+                            root /usr/share/nginx/html;
+    }
+    
+    # Rewrite for content.
+
+    if (!-d \$request_filename) {
+
+            rewrite ^/(.+)/$ /\$1 permanent;
+
+    }
+
+    location ~* \.php$ {
+
+            # Server PHP config.
+            fastcgi_pass                    unix:/var/run/php5-fpm.sock;
+            fastcgi_index                   index.php;
+            fastcgi_split_path_info         ^(.+\.php)(.*)$;
+
+            # Typical vars in here, nothing interesting.
+
+            include                         /etc/nginx/fastcgi_params;
+            fastcgi_param                   SCRIPT_FILENAME \$document_root\$fastcgi_script_name;
+
+    }
+
+    location ~ /\.ht {
+
+            # Hells no, we usin nginx up in this mutha. (deny .htaccess)
+            deny all;
+
+    }
+}
+"
+    
+    echo ""
+    echo "Writing vhost file: $FULLPATH"
+    echo ""
+    echo "$VHOST_TEMPLATE" >> $FULLPATH
+    echo "127.0.1.1        $VHOST_SERVERNAME" >> $HOST_FILE
+}
+
+function symlinkAndReloadServer() {
+    sudo ln -s $FULLPATH /etc/nginx/sites-enabled/$VHOST_SERVERNAME
+    sudo service nginx reload
+}
+
+main() {
+    checkPermission
+    testIfServerNameProvided "$1"
+    createVhostFile $*
+    symlinkAndReloadServer $*
+}
+
+main $*

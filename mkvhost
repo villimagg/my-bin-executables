@@ -1,0 +1,61 @@
+#!/usr/bin/env bash
+
+SITES_AVAILABLE='/etc/apache2/sites-available'
+HOST_FILE='/etc/hosts'
+VHOST_SERVERNAME=$1
+USER_ID=`id -u`
+
+if test ! -z "$1"
+then
+    VHOST_SERVERNAME=$1
+else
+    read -p "Please enter servername for vhost: " VHOST_SERVERNAME
+fi
+
+read -p "Please complete the path to the virtual hosts document root: $HOME/" VHOST_DOCROOT
+
+FULLPATH="$SITES_AVAILABLE/$VHOST_SERVERNAME"
+
+VHOST_TEMPLATE="
+<VirtualHost *:80>
+        ServerName $VHOST_SERVERNAME
+        ServerAlias *.$VHOST_SERVERNAME
+        DocumentRoot $HOME/$VHOST_DOCROOT
+        <Directory />
+                Options FollowSymLinks
+                AllowOverride All
+        </Directory>
+        <Directory $HOME/$VHOST_DOCROOT>
+                Options Indexes FollowSymLinks MultiViews
+                AllowOverride All
+                Order allow,deny
+                allow from all
+        </Directory>
+
+        ErrorLog ${APACHE_LOG_DIR}/error.log
+
+        # Possible values include: debug, info, notice, warn, error, crit,
+        # alert, emerg.
+        LogLevel warn
+
+        CustomLog ${APACHE_LOG_DIR}/access.log combined
+</VirtualHost>
+"
+
+if [[ $UID -ne 0 ]]; then 
+    echo ''
+    echo "You must be root to run this script."
+    echo "Use 'sudo mkvhost <hostname>'"
+    echo ''
+else
+
+    echo ""
+    echo "Writing vhost file: $FULLPATH"
+    echo ""
+    echo "$VHOST_TEMPLATE" >> $FULLPATH
+    echo "127.0.1.1        $VHOST_SERVERNAME" >> $HOST_FILE
+
+fi
+
+sudo a2ensite $VHOST_SERVERNAME
+sudo service apache2 reload

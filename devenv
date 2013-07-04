@@ -1,0 +1,167 @@
+#!/usr/bin/env bash
+
+etc_local="/usr/local/etc"
+
+function main() {
+    determineActions $*
+}
+
+function Die() {
+    echo "$*"
+    exit 1
+}
+
+function message() {
+    echo
+    echo "$*"
+    echo
+}
+
+function Update() {
+    updateComposer
+    updateCodeception
+    updatePHPUnit
+    updateRubyGems
+    updateNPM
+    message "Everything is up to date! Congrats!"
+}
+
+function determineActions() {
+    if [[ $1 == "update" ]]; then
+        Update
+        exit 1
+    fi
+    cat <<ENDOFMESSAGE
+
+Howdy,
+
+This is an evironment updater script.
+It updates Codeception, PHPUnit, RVM, RubyGems, NVM and NPM for Node.js or installs any of those programms/servers if not installed.
+
+To use type 'devenv update'.
+Remember to be patient. This can take a long time depending on the number of moduels you've got installed.
+
+Y'all take care now!
+
+Cheers!
+
+ENDOFMESSAGE
+exit 1
+}
+
+# ---------------------------- Composer --------------------------------
+
+function installComposer() {
+    cd
+    if [[ ! `which composer` ]]; then
+        message "Composer was not found, installing..."
+        curl -sS https://getcomposer.org/installer | php
+        sudo mv composer.phar /usr/local/bin/composer
+        message "Finished installing Composer."
+    fi
+}
+
+function updateComposer() {
+    message "Updating Composer..."
+    installComposer
+    sudo composer self-update
+    message "Finished updating Composer."
+}
+
+# --------------------------- Codeception ------------------------------
+
+function installCodeception() {
+    if [[ ! `which codecept` ]]; then
+        message "Codeception was not found, installing..."
+        cd $etc_local
+        sudo mkdir codeception && cd codeception
+        sudo cat <<ENDCOMPOSER > composer.json
+{
+    "require": {
+        "codeception/codeception": "dev-master"
+    }
+}
+ENDCOMPOSER
+        cd $etc_local/codeception
+        if [[ ! -f ./composer.json ]]; then
+            Die "Error creating file composer.json in /usr/local/etc/codeception"
+        fi
+        sudo composer install
+        sudo ln -s /usr/local/etc/codeception/vendor/codeception/codeception/codecept /usr/local/bin/codecept
+        cd
+        message "Finished installing Codeception."
+    fi
+}
+
+function updateCodeception() {
+    message "Updating Codeception..."
+    installCodeception
+    if [[ ! -d /usr/local/etc/codeception ]]; then
+        Die "Error: Codeception directory not found at /usr/local/etc/codeception"
+    fi
+    cd $etc_local/codeception
+    sudo composer update
+    cd
+    message "Finished updating Codeception."
+}
+
+# --------------------------- PHPUnit ------------------------------
+
+function installPHPUnit() {
+    if [[ ! `which phpunit` ]]; then
+        message "PHPUnit was not found..."
+        sudo mkdir $etc_local/phpunit
+        cd $etc_local/phpunit
+        sudo cat <<ENDCOMPOSER > composer.json
+{
+    "require": {
+        "phpunit/phpunit": "3.7.*@dev"
+    },
+    "config": {
+        "bin-dir": "/usr/local/bin/"
+    }
+}
+ENDCOMPOSER
+        sudo composer install
+        cd
+        message "Finished installing PHPUnit."
+    fi
+}
+
+function updatePHPUnit() {
+    message "Updating PHPUnit..."
+    installPHPUnit
+    cd $etc_local/phpunit
+    sudo composer update
+    cd
+    message "Finished updating PHPUnit."
+}
+
+# --------------------------- rvm -----------------------------
+
+function installRVM() {
+    cd
+    if [[ ! -d ~/.rvm ]]; then
+        sudo apt-get -y install gcc-4.6-base cpp-4.6 libgomp1 libquadmath0 libc6-dev bison zlib1g-dev libssl-dev autoconf automake libtool curl libreadline6-dev libyaml-dev libsqlite3-dev sqlite3 libxml2-dev libxslt1-dev libgdbm-dev libncurses5-dev libffi-dev
+        curl -#L https://get.rvm.io | bash -s stable --autolibs=3 --auto-dotfiles --ruby
+    fi
+}
+
+function updateRVM() {
+    installRVM
+    rvm get stable --auto-dotfiles
+}
+
+function updateRubyGems() {
+    updateRVM
+    gem update
+    gem clean
+}
+
+# --------------------------- nvm -----------------------------
+
+function updateNPM() {
+    npm update
+}
+
+main $*

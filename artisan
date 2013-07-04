@@ -1,0 +1,239 @@
+#!/usr/bin/env bash
+
+REPO='git@github.com:villimagg/my-laravel4-boilerplate.git'
+
+if [[ -f "./artisan" ]]; then
+    php artisan "$@"
+  
+else
+  
+  # if [[ $1 == "new" ]]; then
+  
+    if [[ ! `which git` ]]; then 
+        echo "For this installer to work you'll need to install Git."
+        echo '        http://git-scm.com/'
+    fi
+    
+function Usage() {
+cat <<-ENDOFMESSAGE
+
+Artisan is the command line tool for Laravel PHP framework http://laravel.com'
+
+$0 [options] command [arguments]
+
+To create a new Laravel project:
+    artisan new <project_name>                Creates a new Laravel project from the current stable branch (master)
+    artisan new <project_name> -b <branch>    Creates a new Laravel project from the branch specified
+    artisan new <project_name> --dev          A shorthand to create a new Laravel project from the development branch
+  
+options:
+
+    -b -branch  branch to use (default: master)
+    -h --help   display this message
+    --dev       shorthand for fetching development branch
+
+While inside a Laravel project folder there are a number of available commands using artisan.
+Type 'artisan list' for a full list of commands. 
+
+ENDOFMESSAGE
+exit 1
+}
+    function message() {
+      echo
+      echo "$*"
+      echo
+    }
+    
+    function endMsg() {
+      echo
+      echo "Done! Your application is ready and was installed in $PWD/${argv[1]}"
+      echo
+      exit 1
+    }
+    
+    function Die()
+    {
+        echo "$*"
+        exit 1
+    }
+    
+    function runCodeceptBootstrap() {
+        if [[ ! `which codecept` ]]; then
+            cat <<ENDOFMESSAGE
+
+Codeception was not detected on your system.
+
+Could not bootstrap the Codeception BDD testing framework.
+
+You need to install Codeception either globally or locally and run 'codecept bootstrap app'.
+And then 'mv app/codeception.yml codeception.yml'.
+Next update the codeception.yml file to point to app/tests directory.
+
+ENDOFMESSAGE
+        else
+            codecept bootstrap app
+            mv app/codeception.yml codeception.yml.original
+            cat <<EOF > codeception.yml
+paths:
+    tests: app/tests
+    log: app/tests/_log
+    data: app/tests/_data
+    helpers: app/tests/_helpers
+settings:
+    bootstrap: _bootstrap.php
+    suite_class: \PHPUnit_Framework_TestSuite
+    colors: true
+    memory_limit: 1024M
+    log: true
+modules:
+    config:
+        Db:
+            dsn: ''
+            user: ''
+            password: ''
+            dump: app/tests/_data/dump.sql
+EOF
+           message "Codeception installed and Bootstrapped..."
+        fi
+    }
+    
+    function checkComposer() {
+        if [[ ! `which composer` ]]; then
+          message "Composer not detected. Fetching it..."
+          curl -s https://getcomposer.org/installer | php
+          sudo mv composer.phar /usr/local/bin/composer
+          message "Composer now available on your system."
+        fi
+        sudo composer self-update
+    }
+
+    function runComposerInstallAndFinish() {
+        git checkout -b ${argv[1]}
+        if [[ $branch == "3.0" ]]; then
+          chmod -R 0777 ./storage/
+          git add .
+          git commit -am "Commit laravel application structure"
+          endMsg
+        fi
+        composer install
+        chmod -R 0777 app/storage
+        php artisan key:generate
+        runCodeceptBootstrap
+        git add .
+        git commit -am "Commit laravel application structure"
+        endMsg
+    }
+    
+    function runComposerForMasterAndFinish() {
+      composer create-project laravel/laravel ./${argv[1]}
+      cd ${argv[1]}
+      git init
+      chmod -R 0777 app/storage
+      #runCodeceptBootstrap
+      git add .
+      git commit -am "Commit laravel application structure"
+      cd ..
+      endMsg
+    }
+    
+    function installFromOwnRepo() {
+        if [[ -z $REPO ]]; then
+            cat <<-ENDOFMESSAGE
+No repository listed.
+
+If you have your own repository to store your personal Laravel base app and want to use this installer for it
+open '/usr/local/bin/artisan' as root using vim or any text editor and on line 3 find REPO=''.
+Type your own repository address in between the single-quotes where you see REPO=''.
+The result should be something like: REPO='git://github.com/yourusername/yourbaseapp.git'
+And then try again. Thank you.
+            
+ENDOFMESSAGE
+          exit 1
+        fi
+        git clone $REPO ./${argv[1]}
+        cd ${argv[1]}
+        composer install
+        php artisan key:generate
+        runCodeceptBootstrap
+        git add .
+        git commit -am 'Commit Laravel Structure.'
+        cd ..
+        message "It's up to you to maintain and update the Laravel part of your application."
+        endMsg
+    }
+    
+    function GetOpts() {
+        branch="master"
+        argv=()
+        while [ $# -gt 0 ]
+        do
+            opt=$1
+            shift
+            case ${opt} in
+                -b|--branch)
+                    if [ $# -eq 0 -o "${1:0:1}" = "-" ]; then
+                        Die "The ${opt} option requires a branch name (e.g. develop, 3.0, etc...)."
+                    fi
+                    branch="$1"
+                    shift
+                    ;;
+                -h|--help|?)
+                    Usage;;
+                --dev)
+                    branch="develop"
+                    shift
+                    ;;
+                --own)
+                    branch=$REPO
+                    shift
+                    ;;
+                *)
+                    if [ "${opt:0:1}" = "-" ]; then
+                        Die "${opt}: unknown option."
+                    fi
+                    argv+=(${opt});;
+            esac
+        done
+    }
+    
+    function createApp() {
+        message "Creating application ${argv[1]} ..."
+        if [[ $branch == "master" ]]; then
+          runComposerForMasterAndFinish
+        else
+          if [[ $branch == $REPO ]]; then
+            installFromOwnRepo
+          else
+            mkdir ${argv[1]} && cd ${argv[1]}
+            git init
+            git remote add laravel https://github.com/laravel/laravel
+            git fetch laravel
+            git merge laravel/${branch}
+            git checkout ${branch}
+            runComposerInstallAndFinish
+          fi
+        fi
+    }
+    
+    function determineActionFromOpts() {
+      if [[ ! ${argv[0]} == "new" ]]; then
+        message "Invalid argument: ${argv[0]}"
+        Usage
+      fi
+      if [[ -z "${argv[1]}" ]]; then
+        message "Missing application name after new"
+        Usage
+      fi
+      createApp
+    }
+    
+    if [[ $# -gt 0 ]]; then
+      checkComposer
+      GetOpts $*
+      determineActionFromOpts
+    fi
+    
+    if [[ $# -eq 0 ]]; then
+      Usage
+    fi
+fi
