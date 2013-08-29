@@ -117,11 +117,20 @@ function symlinkAndReloadServer() {
     sudo service nginx reload
 }
 
+function finalMsg() {
+    cat << EOM
+
+Done! To serve assets reference their URL, not their physical location on your hard drive.
+
+EOM
+}
+
 main() {
     checkPermission
     testIfServerNameProvided "$1"
     createVhostFile $*
     symlinkAndReloadServer $*
+    finalMsg
 }
 
 main $*
