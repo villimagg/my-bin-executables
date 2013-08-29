@@ -36,7 +36,7 @@ server {
     server_name             $VHOST_SERVERNAME;
     
     root                    $HOME/$VHOST_DOCROOT;
-    index                   index.php;
+    index                   index.htm index.html index.php;
 
     access_log              /var/log/nginx/$VHOST_SERVERNAME-access.log;
     error_log               /var/log/nginx/$VHOST_SERVERNAME-error.log;
@@ -51,6 +51,17 @@ server {
     location @rewrites {
         rewrite ^ /index.php?\$query_string;
     }
+    
+    # This block will catch static file requests, such as images, css, js
+    # The ?: prefix is a 'non-capturing' mark, meaning we do not require
+    # the pattern to be captured into $1 which should help improve performance
+    location ~* \.(?:ico|css|js|gif|jpe?g|png)$ {
+        # Some basic cache-control for static files to be sent to the browser
+        expires max;
+        add_header Pragma public;
+        add_header Cache-Control \"public, must-revalidate, proxy-revalidate\";
+    }
+
     
     location = /robots.txt  { access_log off; log_not_found off; }
     location = /favicon.ico { access_log off; log_not_found off; }    
